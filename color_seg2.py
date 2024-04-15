@@ -28,6 +28,7 @@ def get_labels(image, color_k=8, iter_num=10):
     criteria = (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 20, 0.001)
 
     _, labels, centers = cv2.kmeans(pixels.astype(np.float32), color_k, None, criteria, iter_num, cv2.KMEANS_RANDOM_CENTERS)
+
     return labels
 
 
@@ -91,29 +92,26 @@ def quantize_colors(image, inverted_mask_list):
         result[np.where(inverted_mask != 0)] = 255
         result[np.where(inverted_mask == 0)] = image.copy()[np.where(inverted_mask == 0)]
 
-        res_list.append(result)
+        
         quantize_filename = os.path.join(quantize_dir, f'mask{idx}')
         cv2.imwrite(f'{quantize_filename}.png', result)
-        # cv2.imwrite(f'result_image{formatted_datetime}.png', result)
+
+        # 颜色存在误差问题
+        result = Image.open(f'{quantize_filename}.png')
+        res_list.append(result)
     return res_list
 
 
 def get_quantize_colors(image=None, color_k=8, iter_num=10):
-
+    image = cv2.imread(image, cv2.IMREAD_COLOR)
     labels = get_labels(image, color_k, iter_num)
     masks = get_mask(labels, image)
     inverted_masks = get_inverted_mask(masks)
     results = quantize_colors(image, inverted_masks)
     return results
 
-def soft_process(image_path, operation='close', kernel_size=5):
-    # if isinstance(image_path, str):
-    #     # 读取彩色图像
-    #     image = cv2.imread(image_path, cv2.IMREAD_COLOR)
-    #     print('!!!!!!!!!')
-    # else:
-    #     image = image_path
-    #     image = cv2.cvtColor(image, cv2.IMREAD_COLOR)
+def soft_process(image_path, operation='close先膨胀后腐蚀', kernel_size=5):
+
     image = cv2.imread(image_path, cv2.IMREAD_COLOR)
     # 将彩色图像分割为蓝色、绿色和红色通道
     blue_channel, green_channel, red_channel = cv2.split(image)
@@ -123,17 +121,17 @@ def soft_process(image_path, operation='close', kernel_size=5):
     
     # 对每个通道分别进行形态学操作
     def apply_morphological_operation(channel):
-        if operation == 'dilate':
+        if operation == 'dilate膨胀':
             return cv2.dilate(channel, kernel, iterations=1)
-        elif operation == 'erode':
+        elif operation == 'erode腐蚀':
             return cv2.erode(channel, kernel, iterations=1)
         
         # 先腐蚀后膨胀，用来消除小物体、在纤细点处分离物体、平滑较大物体的边界的同时并不明显改变其面积，消除物体表面的突起。
-        elif operation == 'open':
+        elif operation == 'open先腐蚀后膨胀':
             return cv2.morphologyEx(channel, cv2.MORPH_OPEN, kernel, iterations=1)
         
         # 闭操作就是对图像先膨胀，再腐蚀。闭操作的结果一般是可以将许多靠近的图块相连称为一个无突起的连通域。
-        elif operation == 'close':
+        elif operation == 'close先膨胀后腐蚀':
             return cv2.morphologyEx(channel, cv2.MORPH_CLOSE, kernel, iterations=1)
     
     # 对蓝色、绿色和红色通道分别进行形态学操作
@@ -146,7 +144,7 @@ def soft_process(image_path, operation='close', kernel_size=5):
     
     return processed_image
 
-def soft_process_single(image_path, operation='close', kernel_size=9):
+def soft_process_single(image_path, operation='close先膨胀后腐蚀', kernel_size=9):
     if not os.path.exists('soft_process_single'):
         os.makedirs('soft_process_single')
     soft_process_img = soft_process(image_path, operation, kernel_size)
@@ -180,30 +178,39 @@ if __name__ == "__main__":
     # obj.soft_process_single('result_image0.png', operation='close', kernel_size=9)
 
     with gr.Blocks(analytics_enabled=False) as extract_pic_interface:
-        image = gr.Image(label="输入图片")
-        color_num_slider = gr.Slider(1,10,step=1, label="图片颜色种类", interactive=True)
-        iter_num_slider = gr.Slider(10,50,step=1, label="迭代次数(分辨率太大的，建议迭代次数控制在30次以内)", interactive=True)
-        generate_button = gr.Button(value="生成")
-        generate_button.click(
+        with gr.Row():
+            image1 = gr.Image(label="输入图片", type='filepath')
+            output_gallery1 = gr.Gallery(label="生成结果：",allow_preview=True)
+
+        with gr.Row():
+            with gr.Column():
+                color_num_slider = gr.Slider(1,10,step=1, label="图片颜色种类", interactive=True)
+                iter_num_slider = gr.Slider(10,50,step=1, label="迭代次数", interactive=True)
+            generate_button1 = gr.Button(value="生成")
+        generate_button1.click(
                                 fn=get_quantize_colors,
-                                inputs=[image, color_num_slider, iter_num_slider],
-                                outputs=gr.Gallery(label="生成结果：",allow_preview=True)
+                                inputs=[image1, color_num_slider, iter_num_slider],
+                                outputs=output_gallery1
                               )
 
     with gr.Blocks(analytics_enabled=False) as soft_process_interface:
-        image = gr.Image(label="输入图片", type='filepath')
-        opearation_radio = gr.Radio(['dilate', 'erode', 'open', 'close'], label="操作类型")
-        kernel_size_slider = gr.Radio([3,5,7,9,11], label="内核大小")
-        generate_button = gr.Button(value="生成")
-        generate_button.click(
+        with gr.Row():
+            image2 = gr.Image(label="输入图片", type='filepath')
+            output_gallery2 = gr.Gallery(label="生成结果：",allow_preview=True, type='numpy')
+        with gr.Row():
+            with gr.Column():
+                opearation_radio = gr.Radio(['dilate膨胀', 'erode腐蚀', 'open先腐蚀后膨胀', 'close先膨胀后腐蚀'], label="操作类型")
+                kernel_size_slider = gr.Radio([3,5,7,9,11], label="内核大小")
+            generate_button2 = gr.Button(value="生成")
+        generate_button2.click(
                                 fn=soft_process_single,
-                                inputs=[image, opearation_radio, kernel_size_slider],
-                                outputs=gr.Gallery(label="生成结果：",allow_preview=True, type='numpy')
+                                inputs=[image2, opearation_radio, kernel_size_slider],
+                                outputs=output_gallery2
                               )
     
     interfaces = [
-        (extract_pic_interface, 'extract_pic', 'extract_pic'),
-        (soft_process_interface, 'soft_process', 'soft_process')
+        (extract_pic_interface, '颜色分层', 'extract_pic'),
+        (soft_process_interface, '颜色平滑', 'soft_process')
     ]
 
     with gr.Blocks(analytics_enabled=False) as demo:
@@ -211,5 +218,5 @@ if __name__ == "__main__":
             with gr.TabItem(label, id=ifid,elem_id=f'tab_{ifid}'):
                 interface.render()
     
-    demo.launch()
+    demo.launch(share=True)
 
