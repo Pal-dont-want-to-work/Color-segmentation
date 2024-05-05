@@ -22,9 +22,9 @@
 ## 1. 颜色分层
 
 <div style="display: flex; justify-content: space-between;">
-    <img src="result/logo/pic.png" alt="Image 1" style="width: 33%;">
-    <img src="result/logo/mask1.png" alt="Image 1" style="width: 33%;">
-    <img src="result/logo/mask2.png" alt="Image 2" style="width: 33%;">
+    <img src="result/logo/pic.png" alt="Image 1" style="width: 31%;">
+    <img src="result/logo/mask1.png" alt="Image 1" style="width: 31%;">
+    <img src="result/logo/mask2.png" alt="Image 2" style="width: 31%;">
 </div>
 <div style="display: flex; justify-content: space-between;">
     <img src="result/logo/mask3.png" alt="Image 1" style="width: 33%;">
